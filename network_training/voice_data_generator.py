@@ -1,0 +1,96 @@
+from os import path
+import time
+from typing import List
+import uuid
+
+from gtts import gTTS
+from pydub import AudioSegment
+import pyttsx3
+from text_move_enumerator import get_all_moves
+
+move_files_directory: str = 'move_files'
+
+def change_pitch(input_file, output_file, semitones):
+    """
+    Changes the pitch of the provided audio file by the
+    number of provided semitones.
+    
+    Parameters
+        input_file (str): the path to the audio file to read in
+        output_file (str): the path of the file to which the
+            audio should be written.
+        semitones (int): the number of semitones by which the
+            pitch of the input file should be changed.    
+    """
+    # Load the audio file
+    audio = AudioSegment.from_file(input_file, format="wav")
+
+    # Change the pitch
+    audio = audio._spawn(audio.raw_data, overrides={
+        "frame_rate": int(audio.frame_rate * (2 ** (semitones / 12.0)))
+    })
+
+    # Export the modified audio to a new file
+    audio.export(output_file, format="wav")
+
+def generate_gtts_files():
+    """
+    Generates and saves audio files for all enumerated chess moves
+    using the gTTS engine. Parameters of the engine are varied to
+    produce the maximum number files per move possible.
+    """
+
+    # -- Speech Parameters for gTTS --
+    # top level domains, which result in different accents
+    tlds: List[str] = ['com.au', 'us', 'co.in', 'ie']
+    speeds: List[bool] = [True, False]
+
+    for move in get_all_moves():
+        for speed in speeds:
+            for tld in tlds:
+
+                tts = gTTS(move, lang='en', tld=tld, slow=speed, lang_check=True)
+
+                file_name = move + '-' +str(uuid.uuid1().fields[0])
+                file_name = path.join(move_files_directory, move, file_name)
+                tts.save(file_name + '.mp3')
+
+                # gTTS only saves as mp3, so convert to wav afterwards
+                sound = AudioSegment.from_mp3(file_name)
+                sound.export(path.basename(file_name) + '.wav', format='wav')
+
+        # gTTS has a usage quota currently set at 900 reqs/min
+        # (https://cloud.google.com/speech-to-text/quotas)
+        # Adding brief pauses to avoid exceeding this limit
+        time.sleep(1.0)
+
+def generate_pyttsx3_files():
+    """
+    Generates and saves audio files for all enumerated chess moves
+    using the pyttsx3 engine. Parameters of the engine are varied to
+    produce a large number files per move.
+    """
+
+    engine = pyttsx3.init()
+    voices = engine.getProperty('voices')
+    rates: List[int] = list(range(200, 301, 10))
+    pitches: List[int] = list(range(-4, 5, 1))
+
+    for move in get_all_moves():
+        for voice in voices:
+            for rate in rates:
+                for pitch in pitches:
+                    engine.setProperty('voice', voice.id)
+                    engine.setProperty('rate', rate)
+
+                    file_name = path.basename(voice.id)
+                    file_name += '-rate-' + str(rate)
+                    file_name += '-pitch-' + str(pitch)
+                    file_name += '.wav'
+                    file_name = path.join(move_files_directory, file_name)
+
+                    engine.save_to_file(move, file_name)
+
+                    engine.runAndWait()
+
+                    change_pitch(file_name, file_name, pitch)
