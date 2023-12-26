@@ -84,22 +84,22 @@ def get_all_text_moves() -> List[str]:
 
                 all_moves_list.extend([white_promotion, black_promotion])
 
-                # # capture promotions
-                # if file == 'a':
-                #     white_move = file + 'xb' + str(int(rank) + 1)
-                #     black_move = file + 'xb' + str(int(rank) - 1)
-                #     all_moves.extend([white_move, black_move])
-                # elif file == 'h':
-                #     white_move = file + 'xg' + str(int(rank) + 1)
-                #     black_move = file + 'xg' + str(int(rank) - 1)
-                #     all_moves.extend([white_move, black_move])
-                # else:
-                #     file_index = files.index(file)
-                #     white_move_1 = file + 'x' + files[file_index + 1] + str(int(rank) + 1)
-                #     white_move_2 = file + 'x' + files[file_index - 1] + str(int(rank) + 1)
-                #     black_move_1 = file + 'x' + files[file_index + 1] + str(int(rank) - 1)
-                #     black_move_2 = file + 'x' + files[file_index - 1] + str(int(rank) - 1)
-                #     all_moves.extend([white_move_1, white_move_2, black_move_1, black_move_2])
+                # capture promotions
+                if file == 'a':
+                    white_move = file + 'xb8=' + piece
+                    black_move = file + 'xb1=' + piece
+                    all_moves_list.extend([white_move, black_move])
+                elif file == 'h':
+                    white_move = file + 'xg8=' + piece
+                    black_move = file + 'xg1=' + piece
+                    all_moves_list.extend([white_move, black_move])
+                else:
+                    file_index = files.index(file)
+                    white_move_1 = file + 'x' + files[file_index + 1] + '8=' + piece
+                    white_move_2 = file + 'x' + files[file_index - 1] + '8=' + piece
+                    black_move_1 = file + 'x' + files[file_index + 1] + '1=' + piece
+                    black_move_2 = file + 'x' + files[file_index - 1] + '1=' + piece
+                    all_moves_list.extend([white_move_1, white_move_2, black_move_1, black_move_2])
 
     # castling
     all_moves_list.append('O-O')
@@ -108,12 +108,6 @@ def get_all_text_moves() -> List[str]:
     # as any move can be a check, create a duplicate of every move
     # with the addition of a check
     all_moves_list.extend([move + '+' for move in all_moves_list])
-
-    # print stats
-    print("All moves:")
-    for move in all_moves_list:
-        print(move)
-    print('Number of moves: '+str(len(all_moves_list)))
 
     return all_moves_list
 
@@ -179,27 +173,27 @@ def get_all_voice_moves() -> List[str]:
             if piece != 'King':
 
                 # peaceful promotions
-                white_promotion = file + '8= ' + piece
-                black_promotion = file + '1= ' + piece
+                white_promotion = file + '8 = ' + piece
+                black_promotion = file + '1 = ' + piece
 
                 all_moves_list.extend([white_promotion, black_promotion])
 
-                # # capture promotions
-                # if file == 'a':
-                #     white_move = file + 'xb' + str(int(rank) + 1)
-                #     black_move = file + 'xb' + str(int(rank) - 1)
-                #     all_moves.extend([white_move, black_move])
-                # elif file == 'h':
-                #     white_move = file + 'xg' + str(int(rank) + 1)
-                #     black_move = file + 'xg' + str(int(rank) - 1)
-                #     all_moves.extend([white_move, black_move])
-                # else:
-                #     file_index = files.index(file)
-                #     white_move_1 = file + 'x' + files[file_index + 1] + str(int(rank) + 1)
-                #     white_move_2 = file + 'x' + files[file_index - 1] + str(int(rank) + 1)
-                #     black_move_1 = file + 'x' + files[file_index + 1] + str(int(rank) - 1)
-                #     black_move_2 = file + 'x' + files[file_index - 1] + str(int(rank) - 1)
-                #     all_moves.extend([white_move_1, white_move_2, black_move_1, black_move_2])
+                # capture promotions
+                if file == 'a':
+                    white_move = file + ' takes b8 =' + piece
+                    black_move = file + ' takes b1 =' + piece
+                    all_moves_list.extend([white_move, black_move])
+                elif file == 'h':
+                    white_move = file + 'takes g8 = ' + piece
+                    black_move = file + 'takes g1 = ' + piece
+                    all_moves_list.extend([white_move, black_move])
+                else:
+                    file_index = files.index(file)
+                    white_move_1 = file + ' takes ' + files[file_index + 1] + '8 = ' + piece
+                    white_move_2 = file + ' takes ' + files[file_index - 1] + '8 = ' + piece
+                    black_move_1 = file + ' takes ' + files[file_index + 1] + '1 = ' + piece
+                    black_move_2 = file + ' takes ' + files[file_index - 1] + '1 = ' + piece
+                    all_moves_list.extend([white_move_1, white_move_2, black_move_1, black_move_2])
 
     # castling
     all_moves_list.append('short castle')
@@ -208,11 +202,5 @@ def get_all_voice_moves() -> List[str]:
     # as any move can be a check, create a duplicate of every move
     # with the addition of a check
     all_moves_list.extend([move + ' check' for move in all_moves_list])
-
-    # print stats
-    print("All moves:")
-    for move in all_moves_list:
-        print(move)
-    print('Number of moves: '+str(len(all_moves_list)))
 
     return all_moves_list
