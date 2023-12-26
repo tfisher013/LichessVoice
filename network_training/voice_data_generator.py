@@ -6,9 +6,11 @@ import uuid
 from gtts import gTTS
 from pydub import AudioSegment
 import pyttsx3
-from text_move_enumerator import get_all_moves
+from text_move_enumerator import *
 
 move_files_directory: str = 'move_files'
+all_text_moves = get_all_text_moves()
+all_voice_moves = get_all_voice_moves()
 
 def change_pitch(input_file, output_file, semitones):
     """
@@ -45,14 +47,15 @@ def generate_gtts_files():
     tlds: List[str] = ['com.au', 'us', 'co.in', 'ie']
     speeds: List[bool] = [True, False]
 
-    for move in get_all_moves():
+    for move_index in range(0, len(all_voice_moves)):
+        move = all_voice_moves[move_index]
         for speed in speeds:
             for tld in tlds:
 
                 tts = gTTS(move, lang='en', tld=tld, slow=speed, lang_check=True)
 
                 file_name = move + '-' +str(uuid.uuid1().fields[0])
-                file_name = path.join(move_files_directory, move, file_name)
+                file_name = path.join(move_files_directory, all_text_moves[move_index], file_name)
                 tts.save(file_name + '.mp3')
 
                 # gTTS only saves as mp3, so convert to wav afterwards
@@ -76,7 +79,8 @@ def generate_pyttsx3_files():
     rates: List[int] = list(range(200, 301, 10))
     pitches: List[int] = list(range(-4, 5, 1))
 
-    for move in get_all_moves():
+    for move_index in range(0, len(all_voice_moves)):
+        move = all_voice_moves[move_index]
         for voice in voices:
             for rate in rates:
                 for pitch in pitches:
@@ -87,10 +91,13 @@ def generate_pyttsx3_files():
                     file_name += '-rate-' + str(rate)
                     file_name += '-pitch-' + str(pitch)
                     file_name += '.wav'
-                    file_name = path.join(move_files_directory, file_name)
+                    file_name = path.join(move_files_directory, all_text_moves[move_index], file_name)
 
                     engine.save_to_file(move, file_name)
 
                     engine.runAndWait()
 
                     change_pitch(file_name, file_name, pitch)
+
+if __name__ == "__main__":
+    generate_gtts_files()
