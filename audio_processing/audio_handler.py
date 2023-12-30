@@ -1,26 +1,62 @@
 import wave
 import struct
-import sys
 import math
 import numpy as np
 import matplotlib.pyplot as plt
 import speech_recognition as sr
+import sys
+from pydub import AudioSegment
 
 import pyaudio
 
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
-CHANNELS = 1 if sys.platform == 'darwin' else 2
+CHANNELS = 1 #if sys.platform == 'darwin' else 2
 RATE = 44100
 RECORD_SECONDS = 5
 
-end_partition = 5
-figure_counter = 1
+ambient_noise_level = 0
+
+recording_file_path = 'command_recording_file.wav'
+
+end_partition = 7
 r = sr.Recognizer()
 
-def rms( data ):
+def trim_audio_file(file_path: str, sound_start_index: float, sound_end_index: float):
+    """
+    Trims portions of an audio file from the start and end as indicated by the provided
+    parameters.
+
+    Parameters
+        file_path (str): the path to the audio file to be trimmed.]
+        sound_start_index (float): a value in [0.0, 1.0] representing the fraction of the
+            file to be trimmed from the start
+        sound_end_index (float): a value in [0.0, 1.0] representing the fraction of the
+            file to be trimmed from the end
+    """
+
+    audio = AudioSegment.from_file(file_path)
+
+    # get total duration of audio file
+    total_duration = len(audio)
+
+    # trim audio file and export
+    audio = audio[(int)(sound_start_index * total_duration):-(int)(total_duration * (1 - sound_end_index))]
+    audio.export(file_path, format='wav')
+
+def rms(data: bytes) -> float:
+    """
+    Returns a numerical representation of the volume of the provided sound data.
+
+    Parameters
+        data (bytes): a byte representation of audio data
+
+    Returns
+        float: a numerical representation of the volume of the provided audio data
+    """
+
     count = len(data)/2
-    format = "%dh"%(count)
+    format = '%dh'%(count)
     shorts = struct.unpack( format, data )
     sum_squares = 0.0
     for sample in shorts:
@@ -28,116 +64,141 @@ def rms( data ):
         sum_squares += n*n
     return math.sqrt( sum_squares / count )
 
-num_outer_iter = 0
-while num_outer_iter < 1:
-    convert_audio = False
-    with wave.open('output.wav', 'w') as wf:
-        p = pyaudio.PyAudio()
-        wf.setnchannels(CHANNELS)
-        wf.setsampwidth(p.get_sample_size(FORMAT))
-        wf.setframerate(RATE)
+def convert_audio_file_to_text(file_path: str) -> str:
+    """
+    Uses a voice recognition engine to print a text represtation of the speech
+    in the provided audio file.
 
-        stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True)
+    Parameters
+        file_path (str): the path of the file from which to generate text
 
-        vol_list = []
-        num_samples = RATE // CHUNK * RECORD_SECONDS
-        print('Recording...')
+    Returns
+        str: a text representation of the provided audio file, or an error message
+            if the interpretation was unsuccessful
+    """
 
-        num_inner_iter = 0
-        while True:
-            for _ in range(0, num_samples):
-                sound_data = stream.read(CHUNK, exception_on_overflow = False)
-                vol_list.append(rms(sound_data))
-                wf.writeframes(sound_data)
-            print('Done')
+    move_file=sr.AudioFile(recording_file_path)
+    with move_file as source:
+        audio = r.record(source)
+        try:
+            return  r.recognize_google(audio)
+        except Exception as e:
+            return 'Error identifying speech. Please try again.'
 
-            # decide what to do based on sound in file
-            max_val = max(vol_list)
-            min_val = min(vol_list)
-            silence_threshold = 0.3 * max_val
-            # case 1: audio looks to contain sound
-            if (max_val / min_val) / max_val >= 0.3:
+def start_speech_to_text():
+    """
+    Begins the routine which listens for voice commands and prints
+    the interpreted value to the command line.
+    """
+    
+    num_outer_iter = 0
+    while True:
+        convert_audio = False
+        with wave.open(recording_file_path, 'w') as wf:
+            p = pyaudio.PyAudio()
+            wf.setnchannels(CHANNELS)
+            wf.setsampwidth(p.get_sample_size(FORMAT))
+            wf.setframerate(RATE)
 
-                print("Detected sound in file, silence threshold is "+str(silence_threshold))
+            stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True)
 
-                # case 2: sound within sample is isolated --> BEGIN BY TESTING THIS CASE
-                end_check_index = round((num_samples * (1.0 - (1.0 / end_partition))))
-                end_check_len = round((num_samples * (1.0 / end_partition)))
-                print("Average of last fifth of values is "+str(sum(vol_list[end_check_index:]) / end_check_len))
-                if sum(vol_list[end_check_index:]) / end_check_len <= silence_threshold:      
-                    print('--> Sound is isolated')
-                    convert_audio = True
+            vol_list = []
+            num_samples = RATE // CHUNK * RECORD_SECONDS
 
-                    plt.figure(figure_counter)
-                    plt.plot(vol_list)
-                    plt.title('Original Signal')
-                    figure_counter += 1
+            num_inner_iter = 0
+            actual_samples = 0
+            while True:
 
-                    # could we parallelize the two checks with threads below?
+                # the first time this method is called, dedicate the recording to determining the
+                # level of ambient noise to use as a benchmark when actually identifying speech
+                if num_outer_iter == 0:
+                    print('Detecting ambient noise level. Please remain silent...')
+                else:
+                    print('Recording...')
 
-                    start_silence_index = 0
-                    end_silence_index = num_samples - 1
-                    sound_start_threshold = 5
-                    # find starting index of sound from the start
-                    count = 0
-                    for i in range(0, num_samples):
-                        if vol_list[i] >= silence_threshold:
-                            count += 1
-                            if count == sound_start_threshold:
-                                start_silence_index = i - count
-                                break
-                    # find starting index of sound from the end
-                    print('Start isolation index = '+str(start_silence_index))
-                    count = 0
-                    for i in reversed(range(0, num_samples)):
-                        if vol_list[i] >= silence_threshold:
-                            count += 1
-                            if count == sound_start_threshold:
-                                end_silence_index = i + count
-                                break
-                    print('End isolation index = '+str(end_silence_index))
+                # save a number of samples of microphone data to file
+                for _ in range(0, (int)(num_samples / (num_inner_iter + 1))):
+                    sound_data = stream.read(CHUNK, exception_on_overflow = False)
+                    vol_list.append(rms(sound_data))
+                    wf.writeframes(sound_data)
+                    actual_samples += 1
 
-                    # remove silent sections from start
-                    vol_list = [ele for idx, ele in enumerate(vol_list) if idx not in range(end_silence_index, num_samples - 1)]
-
-                    # remove silent sections from start
-                    vol_list = [ele for idx, ele in enumerate(vol_list) if idx not in range(0, start_silence_index)]
-
-                    # process sound
-                    plt.figure(figure_counter)
-                    plt.plot(vol_list)
-                    plt.title('Truncated Signal')
-                    figure_counter += 1
-
+                # restart outer loop after updating ambient noise var on first iteration only
+                if num_outer_iter == 0:
+                    ambient_noise_level = sum(vol_list) / len(vol_list)
+                    print('Ambient noise level: ', ambient_noise_level)
                     break
 
-                # case 3: sound within sample is not isolated
+                max_val = max(vol_list)
+                min_val = min(vol_list)
+                silence_threshold = 1.25 * ambient_noise_level
+                # case 1: audio looks to contain sound
+                if max_val >= 1.5 * ambient_noise_level:
+
+                    print('Detected sound in file, silence threshold is ', silence_threshold, ' for min: ', min_val, ', max: ', max_val)
+
+                    # case 2: sound within sample is isolated --> BEGIN BY TESTING THIS CASE
+                    end_check_index = round((actual_samples * (1.0 - (1.0 / end_partition))))
+                    end_check_len = round((actual_samples * (1.0 / end_partition)))
+                    print('Average of last fifth of values is ', sum(vol_list[end_check_index:]) / end_check_len, ', given by index ', end_check_index)
+                    if sum(vol_list[end_check_index:]) / end_check_len <= 1.05 * silence_threshold:      
+                        print('--> Sound is isolated')
+                        convert_audio = True
+
+                        # could we parallelize the two checks with threads below?
+
+                        start_silence_index = 0
+                        end_silence_index = num_samples
+                        sound_start_threshold = 5
+                        # find starting index of sound from the start
+                        count = 0
+                        for i in range(0, num_samples):
+                            if vol_list[i] >= silence_threshold:
+                                count += 1
+                                if count == sound_start_threshold:
+                                    start_silence_index = max(0, i - 2 * count)
+                                    break
+                        # find starting index of sound from the end
+                        count = 0
+                        for i in reversed(range(0, num_samples)):
+                            if vol_list[i] >= 1.05 * ambient_noise_level:
+                                count += 1
+                                if count == sound_start_threshold:
+                                    end_silence_index = min(i + 6 * count, actual_samples)
+                                    break
+
+                        # remove silence at beginning and end of file
+                        trim_audio_file(recording_file_path, start_silence_index / actual_samples, end_silence_index / actual_samples)
+
+                        break
+
+                    # case 3: sound within sample is not isolated -> record for additional time to capture entire command
+                    else:
+                        num_inner_iter += 1
+                        print('--> Sound is not isolated, recording for additional ', RECORD_SECONDS / (num_inner_iter + 1), 'seconds.')
+                        continue
+                
+                # case 4: audio contains no sound -> overwrite file
                 else:
-                    print('--> Sound is not isolated')
-                    num_inner_iter += 1
-                    continue
-            
-            # case 4: audio contains no sound (do nothing, continue to next loop iteration)
-            else:
-                print("Detected no sound in file")
-                break
+                    print('Detected no sound in file')
+                    break
 
-        stream.close()
-        p.terminate()
+            # close file being written to once we have isolated sound
+            stream.close()
+            p.terminate()
 
-        if convert_audio:
-            print("Converting audio...")
-            convert_audio = False
-            hellow=sr.AudioFile('output.wav')
-            with hellow as source:
-                audio = r.record(source)
-                try:
-                    s = r.recognize_google(audio)
-                    print("Text: "+s)
-                except Exception as e:
-                    print("Exception: "+str(e))
+            if convert_audio:
+                convert_audio = False
+                move_text = convert_audio_file_to_text(recording_file_path)
+                print(move_text)
 
-        num_outer_iter += 1
+            num_outer_iter += 1
 
-        # plt.plot(vol_list)
-        plt.show()
+
+if __name__ == "__main__":
+    """
+    Main method for testing
+    """
+
+    start_speech_to_text()
+
